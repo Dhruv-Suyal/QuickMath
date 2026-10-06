@@ -14,7 +14,7 @@ const rnd = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a
 const gcd = (a, b) => (b ? gcd(b, a % b) : a)
 
 export function generate(op, d) {
-  const add = [0, 20, 100, 1000][d]
+  const add = [0, 20, 100, 10000][d]
   const mul = [0, 9, 12, 25][d]
   if (op === 'add') {
     const a = rnd(add / 4 + 2, add), b = rnd(add / 4 + 2, add)
