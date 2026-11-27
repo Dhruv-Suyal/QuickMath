@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { generate } from '../lib/questions'
+import { SKIP, GOOD, STUCK, RANDOM, FINAL, pick as pickQuote } from '../lib/quotes'
+import QuotePopup from './QuotePopup'
 
 const R = 46
 const CIRC = 2 * Math.PI * R
@@ -19,6 +21,7 @@ export default function Play({ cfg, onFinish }) {
   const [status, setStatus] = useState('')      // '', 'ok', 'bad'
   const [left, setLeft] = useState(total)
   const [stats, setStats] = useState({ correct: 0, streak: 0, sum: 0 })
+  const [nudge, setNudge] = useState({ text: '', tone: 'blue' })
 
   const log = useRef([])
   const t0 = useRef(performance.now())
@@ -26,6 +29,17 @@ export default function Play({ cfg, onFinish }) {
   const endAt = useRef(performance.now() + total)
   const input = useRef(null)
   const done = useRef(false)
+  const skipRun = useRef(0)
+  const lastShown = useRef(0)
+  const finalShown = useRef(false)
+
+  // Show a popup. force = ignore the 6 second cooldown.
+  const show = (list, tone, force = false) => {
+    const now = performance.now()
+    if (!force && now - lastShown.current < 6000) return
+    lastShown.current = now
+    setNudge({ text: pickQuote(list), tone })
+  }
 
   const finish = () => {
     if (done.current) return
@@ -33,19 +47,41 @@ export default function Play({ cfg, onFinish }) {
     onFinish(log.current)
   }
 
-  // countdown
+  // countdown (+ final push popup in the last 10 seconds)
   useEffect(() => {
     let raf
     const loop = () => {
       const l = endAt.current - performance.now()
       setLeft(l)
       if (l <= 0) return finish()
+      if (l <= 10000 && !finalShown.current) {
+        finalShown.current = true
+        show(FINAL, 'red', true)
+      }
       raf = requestAnimationFrame(loop)
     }
     raf = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line
   }, [])
+
+  // random popup every 25-45 seconds
+  useEffect(() => {
+    let t
+    const loop = () => {
+      t = setTimeout(() => { show(RANDOM, 'gold'); loop() }, 25000 + Math.random() * 20000)
+    }
+    loop()
+    return () => clearTimeout(t)
+    // eslint-disable-next-line
+  }, [])
+
+  // stuck popup: same question for too long
+  useEffect(() => {
+    const t = setTimeout(() => show(STUCK, 'red'), (cfg.diff === 3 ? 15 : 8) * 1000)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line
+  }, [qKey])
 
   useEffect(() => { input.current?.focus() }, [qKey])
 
@@ -77,7 +113,8 @@ export default function Play({ cfg, onFinish }) {
     setValue(v)
     if (v === '') return
     if (Number(v) === q.answer && v !== '-' && !v.endsWith('.')) {
-      setStatus('ok'); record(true)
+      setStatus('ok'); record(true); skipRun.current = 0
+      if ((stats.streak + 1) % 5 === 0) show(GOOD, 'green', true)
       setTimeout(nextQuestion, 160)
     } else if (v.length >= String(q.answer).length && v.replace('-', '').length >= String(q.answer).length) {
       wrong()
@@ -89,10 +126,24 @@ export default function Play({ cfg, onFinish }) {
     if (e.key === 'Tab') { e.preventDefault(); skip() }
   }
 
-  const skip = () => { if (status) return; record(false); nextQuestion() }
+  const skip = () => {
+    if (status) return
+    record(false); nextQuestion()
+    skipRun.current += 1
+    if (skipRun.current >= 3) {
+      skipRun.current = 0
+      show(SKIP, 'red', true)
+    }
+  }
 
   return (
     <section className="card screen">
+      <QuotePopup
+        text={nudge.text}
+        tone={nudge.tone}
+        onClose={() => setNudge((n) => ({ ...n, text: '' }))}
+      />
+
       <div className="top">
         <div className="ring">
           <svg width="104" height="104" viewBox="0 0 104 104">

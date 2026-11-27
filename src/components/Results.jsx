@@ -1,10 +1,12 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, Cell,
 } from 'recharts'
 import { OPS } from '../lib/questions'
+import { RESULT_LOW, RESULT_MID, RESULT_HIGH, pick } from '../lib/quotes'
 import useMedia from '../lib/useMedia'
+import QuotePopup from './QuotePopup'
 
 export default function Results({ log, onAgain, onHome }) {
   const phone = useMedia('(max-width: 560px)')
@@ -25,6 +27,11 @@ export default function Results({ log, onAgain, onHome }) {
     }
   }, [log])
 
+  const [quote, setQuote] = useState(() => {
+    const acc = (log.filter((l) => l.correct).length / log.length) * 100
+    return pick(acc >= 90 ? RESULT_HIGH : acc >= 70 ? RESULT_MID : RESULT_LOW)
+  })
+
   const kpis = [
     ['Correct', m.good], ['Accuracy', m.acc + '%'], ['Avg speed', m.avg.toFixed(1) + 's'],
     ['Fastest', m.fastest.toFixed(1) + 's'], ['Per minute', m.pm.toFixed(1)],
@@ -32,6 +39,13 @@ export default function Results({ log, onAgain, onHome }) {
 
   return (
     <section className="card screen">
+      <QuotePopup
+        text={quote}
+        ms={5000}
+        tone={m.acc >= 90 ? 'green' : m.acc >= 70 ? 'blue' : 'red'}
+        onClose={() => setQuote('')}
+      />
+
       <h1>{m.acc >= 90 ? 'Sharp work.' : m.acc >= 70 ? 'Solid session.' : 'Keep practicing.'}</h1>
       <div className="kpis">
         {kpis.map(([l, v]) => (
